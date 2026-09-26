@@ -15,6 +15,18 @@ def main():
             "available on your PYTHONPATH environment variable? Did you "
             "forget to activate a virtual environment?"
         ) from exc
+    # Auto-extract preloaded database from compressed gzip if missing
+    import gzip, shutil
+    from pathlib import Path
+    base_dir = Path(__file__).resolve().parent
+    db_file = base_dir / 'db.sqlite3'
+    gz_file = base_dir / 'db.sqlite3.gz'
+    if gz_file.exists() and (not db_file.exists() or db_file.stat().st_size < 10 * 1024 * 1024):
+        print(f"[Auto-Database] Extracting {gz_file.name} to {db_file.name}...")
+        with gzip.open(gz_file, 'rb') as f_in, open(db_file, 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)
+        print(f"[Auto-Database] Extracted {db_file.name} successfully ({db_file.stat().st_size / (1024*1024):.1f} MB)!")
+
     execute_from_command_line(sys.argv)
 
 
