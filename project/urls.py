@@ -14,7 +14,25 @@ class CustomLoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
 
+from django.http import JsonResponse
+
+def api_root(request):
+    return JsonResponse({
+        'status': 'online',
+        'project': 'ITE Damascus University Marks Portal API',
+        'university': 'Damascus University - Faculty of Information Technology Engineering',
+        'author': 'Abdulrahman Saleh',
+        'endpoints': {
+            'admin': '/admin/',
+            'search': '/api/search/students/',
+            'leaderboards': '/api/leaderboards/top30/',
+            'auth_login': '/api/auth/login/',
+            'auth_register': '/api/auth/register/'
+        }
+    })
+
 urlpatterns = [
+    path('', api_root, name='api_root'),
     path('admin/', admin.site.urls),
 
     # Auth Endpoints
