@@ -15,34 +15,73 @@ from reportlab.platypus import (
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.pdfgen import canvas
+from pathlib import Path
+from matplotlib import font_manager
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
-# Register Arabic-capable TrueType Fonts
+# Register Arabic-capable TrueType Fonts from bundled project folder or system
+BASE_DIR = Path(__file__).resolve().parent.parent
+LOCAL_FONT_REGULAR = BASE_DIR / "fonts" / "arial.ttf"
+LOCAL_FONT_BOLD = BASE_DIR / "fonts" / "arialbd.ttf"
+
 FONT_NAME = "ArabicArial"
 BOLD_FONT = "ArabicArialBold"
 
-try:
-    if os.path.exists("C:/Windows/Fonts/arial.ttf"):
-        pdfmetrics.registerFont(TTFont("ArabicArial", "C:/Windows/Fonts/arial.ttf"))
-        pdfmetrics.registerFont(TTFont("ArabicArialBold", "C:/Windows/Fonts/arialbd.ttf"))
-    elif os.path.exists("C:/Windows/Fonts/tahoma.ttf"):
-        pdfmetrics.registerFont(TTFont("ArabicArial", "C:/Windows/Fonts/tahoma.ttf"))
-        pdfmetrics.registerFont(TTFont("ArabicArialBold", "C:/Windows/Fonts/tahomabd.ttf"))
-    else:
-        FONT_NAME = "Helvetica"
-        BOLD_FONT = "Helvetica-Bold"
-except Exception as e:
-    print("Font registration notice:", e)
+def init_fonts():
+    global FONT_NAME, BOLD_FONT
+    try:
+        if LOCAL_FONT_REGULAR.exists() and LOCAL_FONT_BOLD.exists():
+            pdfmetrics.registerFont(TTFont("ArabicArial", str(LOCAL_FONT_REGULAR)))
+            pdfmetrics.registerFont(TTFont("ArabicArialBold", str(LOCAL_FONT_BOLD)))
+            font_manager.fontManager.addfont(str(LOCAL_FONT_REGULAR))
+            font_manager.fontManager.addfont(str(LOCAL_FONT_BOLD))
+            plt.rcParams['font.family'] = font_manager.FontProperties(fname=str(LOCAL_FONT_REGULAR)).get_name()
+            return
+        elif os.path.exists("C:/Windows/Fonts/arial.ttf"):
+            pdfmetrics.registerFont(TTFont("ArabicArial", "C:/Windows/Fonts/arial.ttf"))
+            pdfmetrics.registerFont(TTFont("ArabicArialBold", "C:/Windows/Fonts/arialbd.ttf"))
+            plt.rcParams['font.family'] = 'Arial'
+            return
+        elif os.path.exists("C:/Windows/Fonts/tahoma.ttf"):
+            pdfmetrics.registerFont(TTFont("ArabicArial", "C:/Windows/Fonts/tahoma.ttf"))
+            pdfmetrics.registerFont(TTFont("ArabicArialBold", "C:/Windows/Fonts/tahomabd.ttf"))
+            plt.rcParams['font.family'] = 'Tahoma'
+            return
+        else:
+            linux_fonts = [
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+            ]
+            for lf in linux_fonts:
+                if os.path.exists(lf):
+                    pdfmetrics.registerFont(TTFont("ArabicArial", lf))
+                    pdfmetrics.registerFont(TTFont("ArabicArialBold", lf))
+                    return
+            FONT_NAME = "Helvetica"
+            BOLD_FONT = "Helvetica-Bold"
+    except Exception as e:
+        print("Font registration notice:", e)
 
+init_fonts()
+
+reshaper = arabic_reshaper.ArabicReshaper({
+    'delete_harakat': True,
+    'support_ligatures': True,
+    'support_zwj': True,
+})
 
 def ar(text) -> str:
     """Reshape Arabic text for RTL display in ReportLab."""
     if not text:
         return ""
     try:
-        reshaped = arabic_reshaper.reshape(str(text))
-        return get_display(reshaped)
+        s = str(text)
+        has_arabic = any('\u0600' <= c <= '\u06ff' or '\ufe70' <= c <= '\ufeff' for c in s)
+        if not has_arabic:
+            return s
+        reshaped = reshaper.reshape(s)
+        return get_display(reshaped, base_dir='R')
     except Exception:
         return str(text)
 
