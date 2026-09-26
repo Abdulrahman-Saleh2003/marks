@@ -1,0 +1,35 @@
+# ===================================================================
+# Django Backend - .gitignore
+# Complete protection for credentials, logs, and database files
+# ===================================================================
+
+# 1. Environment Secrets (CRITICAL)
+.env
+*.env
+*.env.*
+!.env.example
+
+# 2. Local Databases & Logs (db.sqlite3 is 161MB > 100MB GitHub limit)
+db.sqlite3
+*.sqlite3
+*.sqlite3-journal
+*.db
+admin_registrations.log
+*.log
+
+# 3. Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*.class
+*.so
+
+# 4. Static and Media
+staticfiles/
+media/
+
+# 5. OS & IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+full_verification_report.txt
