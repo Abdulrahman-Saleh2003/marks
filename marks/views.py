@@ -274,9 +274,13 @@ def build_student_years_summary(marks_qs):
         if isinstance(req_list, dict):
             req_list = req_list.get(detected_dept, req_list.get('SOFTWARE', []))
 
+        def norm_c(s):
+            return re.sub(r'^(?:مشروع|مقرر)\s+', '', s).replace('ال', '').replace(' ', '').replace('ة', 'ه').replace('إ', 'ا').replace('أ', 'ا').replace('آ', 'ا')
+
         unattempted_courses = []
         for rc in req_list:
-            attempted = any(rc in c or c in rc for c in courses_map.keys())
+            n_rc = norm_c(rc)
+            attempted = any(n_rc in norm_c(c) or norm_c(c) in n_rc for c in courses_map.keys())
             if not attempted:
                 unattempted_courses.append({
                     'course_name': rc,
