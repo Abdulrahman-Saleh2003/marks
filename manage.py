@@ -21,7 +21,7 @@ def main():
     base_dir = Path(__file__).resolve().parent
     db_file = base_dir / 'db.sqlite3'
     gz_file = base_dir / 'db.sqlite3.gz'
-    if gz_file.exists() and (not db_file.exists() or db_file.stat().st_size < 10 * 1024 * 1024):
+    if gz_file.exists() and (not db_file.exists() or db_file.stat().st_size < 10 * 1024 * 1024 or gz_file.stat().st_mtime > db_file.stat().st_mtime):
         print(f"[Auto-Database] Extracting {gz_file.name} to {db_file.name}...")
         with gzip.open(gz_file, 'rb') as f_in, open(db_file, 'wb') as f_out:
             shutil.copyfileobj(f_in, f_out)
