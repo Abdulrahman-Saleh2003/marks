@@ -146,7 +146,13 @@ def generate_career_charts(career_data: dict) -> io.BytesIO:
     carried_courses = career_data.get("carried_courses", [])
     all_courses = passed_courses + carried_courses
 
-    plt.rcParams['font.family'] = 'Arial'
+    if LOCAL_FONT_REGULAR.exists():
+        try:
+            plt.rcParams['font.family'] = font_manager.FontProperties(fname=str(LOCAL_FONT_REGULAR)).get_name()
+        except Exception:
+            plt.rcParams['font.family'] = 'Arial'
+    else:
+        plt.rcParams['font.family'] = 'Arial'
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9.4, 3.4), dpi=190)
     fig.patch.set_facecolor('#ffffff')
@@ -226,10 +232,10 @@ def generate_career_charts(career_data: dict) -> io.BytesIO:
         ('failed', 'راسب (<60)', '#DC2626')
     ]
 
-    for key, label, col in palette:
+    for key, label_str, col in palette:
         cnt = grades_count[key]
         if cnt > 0:
-            labels.append(f"{label} [{cnt}]")
+            labels.append(f"{label_str} [{cnt}]")
             sizes.append(cnt)
             colors_list.append(col)
 
@@ -332,15 +338,17 @@ def generate_transcript_pdf(career_data: dict) -> io.BytesIO:
     status_text = career_data.get("academic_status", "ناجح ومرفع")
 
     if cum_gpa >= 80:
-        standing = ar("ممتاز مع مرتبة الشرف (الأولى)")
+        standing = "ممتاز مع مرتبة الشرف"
     elif cum_gpa >= 70:
-        standing = ar("جيد جداً")
+        standing = "جيد جداً"
     elif cum_gpa >= 60:
-        standing = ar("جيد")
+        standing = "جيد"
     elif cum_gpa >= 50:
-        standing = ar("مقبول")
+        standing = "مقبول"
     else:
-        standing = ar("بحاجة لمعالجة")
+        standing = "بحاجة لمعالجة"
+
+    unattempted_count = career_data.get("unattempted_courses_count", len(career_data.get("unattempted_courses", [])))
 
     name_str = f"اسم الطالب: {career_data.get('student_name', '')}"
     name_p = Paragraph(f"<b>{ar(name_str)}</b>", ParagraphStyle(
@@ -355,29 +363,34 @@ def generate_transcript_pdf(career_data: dict) -> io.BytesIO:
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
     ]))
 
+    carried_str = f"{carried_count} محمولة" if carried_count > 0 else "0"
+    if unattempted_count > 0:
+        carried_str += f" | {unattempted_count} لم يقدم"
+    rem_val = ar(carried_str) if (carried_count > 0 or unattempted_count > 0) else ar("0 (سجل خالٍ من الرسوب)")
+
     info_rows = [
         [
-            f"{cum_gpa:.2f}% ({standing})",
+            ar(f"{standing} - {cum_gpa:.2f}%"),
             ar("المعدل التراكمي العام:"),
             all_seats_str,
             ar("أرقام الجلوس (كافة السنوات):")
         ],
         [
-            f"{total_courses} {ar('مقرراً مسجلاً')}",
+            ar(f"{total_courses} مقرراً بالخطة"),
             ar("إجمالي المقررات:"),
             ar(status_text),
             ar("الحالة الأكاديمية الرسمية:")
         ],
         [
-            f"{carried_count} {ar('مقررات متبقية')}" if carried_count > 0 else ar("0 (سجل خالٍ من الرسوب)"),
-            ar("المقررات المتبقية / المحمولة:"),
-            f"{passed_count} {ar('مقرراً بنجاح')} ({(passed_count/max(1,total_courses)*100):.1f}%)",
+            rem_val,
+            ar("المقررات المتبقية / غير المقدمة:"),
+            ar(f"{passed_count} مقرراً بنجاح ({(passed_count/max(1,total_courses)*100):.1f}%)"),
             ar("المقررات المنجزة بنجاح:")
         ],
         [
-            f"{career_data.get('lowest_mark_overall', 0)}% - {ar(career_data.get('lowest_mark_course', ''))[:24]}",
+            ar(f"{career_data.get('lowest_mark_overall', 0)}% - {career_data.get('lowest_mark_course', '')[:22]}"),
             ar("أدنى علامة محققة:"),
-            f"{career_data.get('highest_mark_overall', 0)}% - {ar(career_data.get('highest_mark_course', ''))[:24]}",
+            ar(f"{career_data.get('highest_mark_overall', 0)}% - {career_data.get('highest_mark_course', '')[:22]}"),
             ar("أعلى علامة محققة:")
         ]
     ]
@@ -479,18 +492,33 @@ def generate_transcript_pdf(career_data: dict) -> io.BytesIO:
         story.append(Spacer(1, 8))
     else:
         # Zero Carried Courses - Clean Academic Record Banner
-        clean_p = Paragraph(
-            f"<b>[ {ar('سجل الشرف والتميز الأكاديمي')} ]</b> {ar('لا توجد أي مقررات متبقية أو محمولة - تم إنجاز جميع المقررات الدراسية بنجاح واقتدار (نسبة النجاح 100%).')}",
-            ParagraphStyle('CleanP', fontName=BOLD_FONT, fontSize=8.5, leading=12, alignment=1, textColor=colors.HexColor('#065F46'))
-        )
-        t_clean = Table([[clean_p]], colWidths=[540])
-        t_clean.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#ECFDF5')),
-            ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#10B981')),
-            ('TOPPADDING', (0, 0), (-1, -1), 5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ]))
+        if unattempted_count > 0:
+            clean_text = ar(f"[ سجل أكاديمي منتظم ] لا توجد أي مقررات محمولة بالرسوب - ويوجد {unattempted_count} مقررات بالخطة لم يتقدم لها بعد (مبينة أدناه بعلامة 0% ومسجلة: مش مقدم المادة).")
+            clean_p = Paragraph(
+                f"<b>{clean_text}</b>",
+                ParagraphStyle('CleanP', fontName=BOLD_FONT, fontSize=8.2, leading=12, alignment=1, textColor=colors.HexColor('#1E3A8A'))
+            )
+            t_clean = Table([[clean_p]], colWidths=[540])
+            t_clean.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#EFF6FF')),
+                ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#3B82F6')),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ]))
+        else:
+            clean_p = Paragraph(
+                f"<b>[ {ar('سجل الشرف والتميز الأكاديمي')} ]</b> {ar('لا توجد أي مقررات متبقية أو محمولة - تم إنجاز جميع المقررات الدراسية بنجاح واقتدار (نسبة النجاح 100%).')}",
+                ParagraphStyle('CleanP', fontName=BOLD_FONT, fontSize=8.5, leading=12, alignment=1, textColor=colors.HexColor('#065F46'))
+            )
+            t_clean = Table([[clean_p]], colWidths=[540])
+            t_clean.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#ECFDF5')),
+                ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#10B981')),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ]))
         story.append(t_clean)
         story.append(Spacer(1, 8))
 
@@ -548,23 +576,28 @@ def generate_transcript_pdf(career_data: dict) -> io.BytesIO:
         yr_passed = yr.get("passed_count", len(yr.get("passed_courses", [])))
         yr_carried = yr.get("carried_count", len(yr.get("carried_courses", [])))
 
-        header_str = (
-            f"<b>{ar(yr_name)}</b> | {ar('رقم الجلوس:')} {seat_num} | "
-            f"{ar('معدل السنة:')} {yr_gpa}% | {ar('أعلى علامة:')} {yr_highest}% | "
-            f"{ar('أدنى علامة:')} {yr_lowest}% | {ar('المقررات المنجزة:')} {yr_passed}"
-        )
-        if yr_carried > 0:
-            header_str += f" | <font color='#FCA5A5'>{ar('متبقي:')} {yr_carried}</font>"
+        yr_unattempted = yr.get("unattempted_count", len(yr.get("unattempted_courses", [])))
 
-        p_yr_head = Paragraph(header_str, ParagraphStyle(
-            'YrHead', fontName=BOLD_FONT, fontSize=9, leading=13, alignment=1, textColor=colors.white
-        ))
-        t_yheader = Table([[p_yr_head]], colWidths=[540])
+        # Two-part header banner table (Right cell: Year & Seat, Left cell: Metrics)
+        right_title = ar(f"{yr_name}  |  رقم الجلوس: {seat_num}")
+        left_stats = ar(
+            f"معدل السنة: {yr_gpa}%  |  أعلى: {yr_highest}%  |  أدنى: {yr_lowest}%  |  المنجزة: {yr_passed}" +
+            (f"  |  متبقي: {yr_carried}" if yr_carried > 0 else "") +
+            (f"  |  لم يقدم: {yr_unattempted}" if yr_unattempted > 0 else "")
+        )
+        t_yheader = Table([[left_stats, right_title]], colWidths=[310, 230])
         t_yheader.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#1E3A8A')),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('FONTNAME', (0, 0), (-1, -1), BOLD_FONT),
+            ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.white),
             ('TOPPADDING', (0, 0), (-1, -1), 4),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
         ]))
 
         # Course Rows for this year (RTL order: Col 4 is Course Name, Col 0 is Status)
@@ -595,9 +628,20 @@ def generate_transcript_pdf(career_data: dict) -> io.BytesIO:
                 ar(c.get("course_name", ""))
             ])
 
+        unattempted_start_idx = len(c_table_rows)
+        for u in yr.get("unattempted_courses", []):
+            c_table_rows.append([
+                ar("مش مقدم المادة"),
+                ar("0"),
+                "0%",
+                ar("-"),
+                ar(u.get("course_name", ""))
+            ])
+        unattempted_end_idx = len(c_table_rows)
+
         t_courses = Table(c_table_rows, colWidths=[80, 60, 60, 150, 190])
         
-        # Color specific rows (failed vs passed)
+        # Color specific rows (failed vs passed vs unattempted)
         row_styles = [
             ('FONTNAME', (0, 0), (-1, -1), FONT_NAME),
             ('FONTSIZE', (0, 0), (-1, -1), 8),
@@ -611,8 +655,8 @@ def generate_transcript_pdf(career_data: dict) -> io.BytesIO:
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')])
         ]
 
-        # Highlight marks >= 60 in green, < 60 in red (Col 2 is Score)
-        for r_idx in range(1, len(c_table_rows)):
+        # Highlight marks >= 60 in green, < 60 in red (Col 2 is Score) for attempted courses
+        for r_idx in range(1, unattempted_start_idx):
             score_str = c_table_rows[r_idx][2].replace('%', '').strip()
             try:
                 sc = float(score_str)
@@ -624,6 +668,14 @@ def generate_transcript_pdf(career_data: dict) -> io.BytesIO:
                     row_styles.append(('FONTNAME', (2, r_idx), (2, r_idx), BOLD_FONT))
             except Exception:
                 pass
+
+        # Style unattempted courses (score in gray, status in amber/slate)
+        for u_idx in range(unattempted_start_idx, unattempted_end_idx):
+            row_styles.append(('BACKGROUND', (0, u_idx), (-1, u_idx), colors.HexColor('#F8FAFC')))
+            row_styles.append(('TEXTCOLOR', (0, u_idx), (0, u_idx), colors.HexColor('#B45309')))
+            row_styles.append(('FONTNAME', (0, u_idx), (0, u_idx), BOLD_FONT))
+            row_styles.append(('TEXTCOLOR', (2, u_idx), (2, u_idx), colors.HexColor('#64748B')))
+            row_styles.append(('FONTNAME', (2, u_idx), (2, u_idx), BOLD_FONT))
 
         t_courses.setStyle(TableStyle(row_styles))
         story.append(KeepTogether([t_yheader, t_courses]))
@@ -686,18 +738,18 @@ def generate_mark_pdf(mark_data: dict) -> io.BytesIO:
     status_text = mark_data.get("result_status", "ناجح") if score >= 60 else "راسب"
 
     data = [
-        [ar("البيان الأكاديمي"), ar("التفاصيل الموثقة")],
-        [ar("اسم الطالب الكامل"), ar(mark_data.get("student_name", ""))],
-        [ar("الرقم الامتحاني / الجامعي"), str(mark_data.get("student_university_id", ""))],
-        [ar("اسم المقرر الدراسي"), ar(mark_data.get("course_name", ""))],
-        [ar("الدورة والجلسة الامتحانية"), ar(mark_data.get("session_title", ""))],
-        [ar("درجة الامتحان العملي"), str(mark_data.get("practical_mark") if mark_data.get("practical_mark") else "-")],
-        [ar("درجة الامتحان النظري"), str(mark_data.get("theoretical_mark") if mark_data.get("theoretical_mark") else "-")],
-        [ar("المحصلة النهائية للمقرر"), f"{score}%"],
-        [ar("النتيجة الرسمية المعتمدة"), ar(status_text)]
+        [ar("التفاصيل الموثقة"), ar("البيان الأكاديمي")],
+        [ar(mark_data.get("student_name", "")), ar("اسم الطالب الكامل")],
+        [str(mark_data.get("student_university_id", "")), ar("الرقم الامتحاني / الجامعي")],
+        [ar(mark_data.get("course_name", "")), ar("اسم المقرر الدراسي")],
+        [ar(mark_data.get("session_title", "")), ar("الدورة والجلسة الامتحانية")],
+        [str(mark_data.get("practical_mark") if mark_data.get("practical_mark") else "-"), ar("درجة الامتحان العملي")],
+        [str(mark_data.get("theoretical_mark") if mark_data.get("theoretical_mark") else "-"), ar("درجة الامتحان النظري")],
+        [f"{score}%", ar("المحصلة النهائية للمقرر")],
+        [ar(status_text), ar("النتيجة الرسمية المعتمدة")]
     ]
 
-    t = Table(data, colWidths=[200, 320])
+    t = Table(data, colWidths=[320, 200])
     t.setStyle(TableStyle([
         ('FONTNAME', (0, 0), (-1, -1), FONT_NAME),
         ('FONTSIZE', (0, 0), (-1, -1), 10.5),

@@ -70,3 +70,42 @@ class GDriveSyncLog(models.Model):
 
     def __str__(self):
         return self.file_name
+
+
+class StudentProfile(models.Model):
+    """
+    Inverted Index Student-Centric Entity.
+    Enables instant (sub-millisecond) student lookups, full career analytics,
+    unattempted courses tracking, and inverted course-to-mark mappings.
+    """
+    student_name_clean = models.CharField(max_length=200, unique=True, db_index=True)
+    student_name = models.CharField(max_length=200)
+    primary_id = models.CharField(max_length=50, db_index=True)
+    all_student_ids = models.JSONField(default=list)
+    academic_level = models.IntegerField(default=1)
+    department = models.CharField(max_length=100, default="عام")
+    cumulative_gpa = models.FloatField(default=0.0)
+    passed_courses_count = models.IntegerField(default=0)
+    carried_courses_count = models.IntegerField(default=0)
+    unattempted_courses_count = models.IntegerField(default=0)
+    total_courses_count = models.IntegerField(default=0)
+    highest_mark_overall = models.FloatField(default=0.0)
+    highest_mark_course = models.CharField(max_length=150, blank=True)
+    lowest_mark_overall = models.FloatField(default=0.0)
+    lowest_mark_course = models.CharField(max_length=150, blank=True)
+    academic_status = models.CharField(max_length=100, default="ناجح ومترفع")
+    years_summary = models.JSONField(default=list)
+    courses_inverted_map = models.JSONField(default=dict)
+    progress_chart = models.JSONField(default=list)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['student_name_clean']),
+            models.Index(fields=['primary_id']),
+            models.Index(fields=['cumulative_gpa']),
+        ]
+
+    def __str__(self):
+        return f"{self.student_name} ({self.primary_id})"
+

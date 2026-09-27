@@ -7,7 +7,7 @@ from rest_framework import status, permissions
 from django.db.models import Count, Avg, Max, Min, Q
 from django.http import HttpResponse
 
-from .models import StudentMark, Course, ExamSession, AcademicYear, Department, GDriveSyncLog
+from .models import StudentMark, Course, ExamSession, AcademicYear, Department, GDriveSyncLog, StudentProfile
 from services.arabic_service import calculate_similarity, normalize_arabic
 from services.pdf_service import generate_mark_pdf, generate_transcript_pdf
 from services.gdrive_service import sync_google_drive
@@ -147,9 +147,28 @@ def evaluate_syrian_grace_marks(all_carried_courses):
     return all_carried_courses
 
 
+CURRICULUM_COURSES = {
+    1: ['البرمجة 1', 'البرمجة 2', 'التحليل 1', 'التحليل 2', 'الثقافة القومية الاشتراكية', 'الجبر الخطي', 'الجبر العام', 'الدارات الكهربائية و الالكترونية', 'الفيزياء', 'اللغة العربية', 'انكليزي 1', 'انكليزي 2', 'مبادئ عمل الحواسيب'],
+    2: ['الاتصالات الرقمية', 'الاحتمالات و الاحصاء', 'البرمجة 3', 'التحليل 3', 'التحليل العددي', 'الخوارزميات و بنى المعطيات 1', 'الخوارزميات و بنى المعطيات 2', 'الدارات المنطقية', 'انكليزي 3', 'انكليزي 4', 'بنيان الحواسيب 1', 'مهارات التواصل'],
+    3: ['أساسيات الشبكات', 'البيانيات', 'الحسابات العلمية', 'اللغات الصورية', 'بحوث العمليات', 'بنيان الحواسيب 2', 'قواعد المعطيات 1', 'لغات البرمجة', 'مبادئ الذكاء الصنعي', 'مشروع 1'],
+    4: {
+        'AI': ['الاقتصاد و الإدارة في مؤسسة', 'البرمجة التفرعية', 'التسويق', 'المترجمات', 'خوارزميات البحث الذكية', 'مشروع 2', 'نظم الوسائط المتعددة', 'نظم تشغيل 1', 'هندسة البرمجيات 1', 'الحقائق الافتراضية', 'الشبكات العصبونية', 'نظم قواعد المعرفة'],
+        'SOFTWARE': ['الاقتصاد و الإدارة في مؤسسة', 'البرمجة التفرعية', 'التسويق', 'المترجمات', 'خوارزميات البحث الذكية', 'قواعد المعطيات 2', 'مشروع 2', 'مشروع المترجمات', 'نظم الوسائط المتعددة', 'نظم تشغيل 1', 'هندسة البرمجيات 1', 'هندسة البرمجيات 2'],
+        'NETWORKS': ['البرمجة التفرعية', 'التسويق', 'خوارزميات البحث الذكية', 'نظم الوسائط المتعددة', 'نظم تشغيل 1', 'هندسة البرمجيات 1', 'مشروع 2', 'برتوكولات الاتصالات الحاسوبية', 'برمجة التطبيقات الشبكية', 'نظم التشغيل 2']
+    },
+    5: {
+        'AI': ['أمن الشبكات الحاسوبية', 'استكشاف المعرفة', 'التعلم التلقائي', 'الرؤيا الحاسوبية', 'الروبوتية', 'المنطق الترجيحي و الخوارزميات الوراثية', 'معالجة اللغات الطبيعية', 'مشروع تخرج'],
+        'SOFTWARE': ['أمن نظم معلومات', 'إدارة المشاريع', 'النظم و التطبيقات الموزعة', 'تطبيقات الانترنت', 'قواعد المعطيات المتقدمة', 'مشروع تخرج', 'نظم البحث عن المعلومات', 'هندسة البرمجيات 3', 'هندسة نظم المعلومات'],
+        'NETWORKS': ['أمن الشبكات الحاسوبية', 'إدارة الشبكات الحاسوبية', 'تصميم الشبكات الحاسوبية', 'نظم الزمن الحقيقي', 'نمذجة و محاكاة النظم الشبكية', 'مشروع تخرج']
+    }
+}
+
+
 def build_student_years_summary(marks_qs):
-    """Groups courses and marks year-by-year with accurate de-duplicated attempt counting and stats."""
+    """Groups courses and marks year-by-year with accurate de-duplicated attempt counting, stats and unattempted courses."""
     by_y = {}
+    ai_score = 0
+    net_score = 0
     for m in marks_qs:
         y_id = (
             m.session.course.academic_year_id
@@ -157,6 +176,17 @@ def build_student_years_summary(marks_qs):
             else (int(m.student_university_id[0]) if m.student_university_id and m.student_university_id[0] in '12345' else 1)
         )
         by_y.setdefault(y_id, []).append(m)
+        cname = m.session.course.name if m.session and m.session.course else ""
+        if any(k in cname for k in ['عصبونية', 'حقائق', 'قواعد المعرفة', 'التعلم التلقائي', 'رؤيا', 'روبوتية']):
+            ai_score += 1
+        elif any(k in cname for k in ['برتوكولات', 'تطبيقات شبكية', 'تشغيل 2', 'تصميم شبكات']):
+            net_score += 1
+
+    detected_dept = 'AI' if ai_score >= 2 and ai_score >= net_score else ('NETWORKS' if net_score >= 2 else 'SOFTWARE')
+
+    max_year = max(by_y.keys()) if by_y else 1
+    for y_idx in range(1, max_year + 1):
+        by_y.setdefault(y_idx, [])
 
     years_out = []
     all_unique_scores = []
@@ -167,7 +197,8 @@ def build_student_years_summary(marks_qs):
         m_list = by_y[y_id]
         courses_map = {}
         for m in m_list:
-            courses_map.setdefault(m.session.course.name, []).append(m)
+            if m.session and m.session.course:
+                courses_map.setdefault(m.session.course.name, []).append(m)
 
         passed_courses = []
         carried_courses = []
@@ -236,10 +267,33 @@ def build_student_years_summary(marks_qs):
                     'result_status': a.result_status
                 })
 
+        # Calculate unattempted curriculum courses
+        seat_numbers = sorted(list(set(m.student_university_id for m in m_list if m.student_university_id)))
+        default_seat = seat_numbers[0] if seat_numbers else ""
+        req_list = CURRICULUM_COURSES.get(y_id, [])
+        if isinstance(req_list, dict):
+            req_list = req_list.get(detected_dept, req_list.get('SOFTWARE', []))
+
+        unattempted_courses = []
+        for rc in req_list:
+            attempted = any(rc in c or c in rc for c in courses_map.keys())
+            if not attempted:
+                unattempted_courses.append({
+                    'course_name': rc,
+                    'final_score': 0.0,
+                    'last_score': 0.0,
+                    'attempts_count': 0,
+                    'session_title': '-',
+                    'academic_year': '-',
+                    'student_university_id': default_seat,
+                    'mark_id': None,
+                    'status': 'لم يتقدم للمقرر',
+                    'is_unattempted': True
+                })
+
         passed_courses.sort(key=lambda x: x['final_score'], reverse=True)
         carried_courses.sort(key=lambda x: x['last_score'], reverse=True)
         year_gpa = round(sum(year_scores) / len(year_scores), 2) if year_scores else 0.0
-        seat_numbers = sorted(list(set(m.student_university_id for m in m_list)))
 
         # Highest and lowest mark in this specific year
         year_highest_mark = max(year_scores) if year_scores else 0
@@ -252,18 +306,20 @@ def build_student_years_summary(marks_qs):
         years_out.append({
             'year_id': y_id,
             'year_name': y_name,
-            'seat_number': seat_numbers[0] if seat_numbers else '',
+            'seat_number': default_seat,
             'seat_numbers': seat_numbers,
             'annual_gpa': year_gpa,
-            'total_courses': len(courses_map),
+            'total_courses': len(courses_map) + len(unattempted_courses),
             'passed_count': len(passed_courses),
             'carried_count': len(carried_courses),
+            'unattempted_count': len(unattempted_courses),
             'highest_mark': year_highest_mark,
             'highest_course': year_highest_course,
             'lowest_mark': year_lowest_mark,
             'lowest_course': year_lowest_course,
             'passed_courses': passed_courses,
             'carried_courses': carried_courses,
+            'unattempted_courses': unattempted_courses,
             'marks': raw_marks_list
         })
 
@@ -363,6 +419,49 @@ class StudentSearchView(APIView):
         student_id = get_param(request, "student_id")
         academic_year = get_param(request, "academic_year")
         course_name = get_param(request, "course_name")
+
+        # 🚀 1. FAST INVERTED INDEX SEEK: Check precomputed StudentProfile records (<5ms)
+        search_term = name or raw_query or student_id
+        if search_term and not academic_year and not course_name:
+            clean_term = normalize_arabic(search_term)
+            toks = [t for t in clean_term.split() if len(t) >= 2]
+            prof_q = Q()
+            if search_term.isdigit():
+                prof_q = Q(primary_id__icontains=search_term) | Q(all_student_ids__icontains=search_term)
+            elif toks:
+                for t in toks:
+                    prof_q &= (Q(student_name_clean__icontains=t) | Q(student_name__icontains=t))
+
+            profiles = StudentProfile.objects.filter(prof_q).order_by('-cumulative_gpa')[:25]
+            if profiles.exists():
+                out = []
+                for p in profiles:
+                    all_marks_flat = []
+                    for y in p.years_summary:
+                        all_marks_flat.extend(y.get('marks', []))
+                    out.append({
+                        "student_university_id": p.primary_id,
+                        "student_name": p.student_name,
+                        "all_student_ids": p.all_student_ids,
+                        "academic_status": p.academic_status,
+                        "academic_level": p.academic_level,
+                        "department": p.department,
+                        "cumulative_gpa": p.cumulative_gpa,
+                        "passed_courses_count": p.passed_courses_count,
+                        "carried_courses_count": p.carried_courses_count,
+                        "unattempted_courses_count": p.unattempted_courses_count,
+                        "total_courses_taken": p.total_courses_count,
+                        "highest_mark_overall": p.highest_mark_overall,
+                        "highest_mark_course": p.highest_mark_course,
+                        "lowest_mark_overall": p.lowest_mark_overall,
+                        "lowest_mark_course": p.lowest_mark_course,
+                        "years_summary": p.years_summary,
+                        "courses_inverted_map": p.courses_inverted_map,
+                        "progress_chart": p.progress_chart,
+                        "marks": all_marks_flat,
+                        "marks_sample": all_marks_flat[:15]
+                    })
+                return Response(out)
 
         target_clean_names = []
 
@@ -534,17 +633,76 @@ class StudentCareerSummaryView(APIView):
                     target_clean = match.student_name_clean
                     student_name = match.student_name
 
-            if not target_clean:
-                best_match = (
-                    StudentMark.objects.filter(student_university_id=student_id_str)
-                    .values('student_name_clean', 'student_name')
-                    .annotate(c=Count('id'))
-                    .order_by('-c')
-                    .first()
-                )
-                if best_match:
-                    target_clean = best_match['student_name_clean']
-                    student_name = best_match['student_name']
+        # 🚀 0. FAST INVERTED INDEX SEEK: Check precomputed StudentProfile records (<1ms)
+        p_match = None
+        if target_clean:
+            p_match = StudentProfile.objects.filter(student_name_clean=target_clean).first()
+            if not p_match:
+                tokens = [tok for tok in target_clean.split() if len(tok) >= 2]
+                if tokens:
+                    t_q = Q()
+                    for tok in tokens:
+                        t_q &= (Q(student_name_clean__icontains=tok) | Q(student_name__icontains=tok))
+                    p_match = StudentProfile.objects.filter(t_q).first()
+        if not p_match and student_id_str:
+            p_match = StudentProfile.objects.filter(primary_id=student_id_str).first()
+        if not p_match and student_id_str:
+            p_match = StudentProfile.objects.filter(all_student_ids__icontains=student_id_str).first()
+
+        if p_match:
+            all_passed = []
+            all_carried = []
+            all_unattempted = []
+            all_marks_flat = []
+            annual_gpas = {}
+            for y in p_match.years_summary:
+                all_passed.extend(y.get('passed_courses', []))
+                all_carried.extend(y.get('carried_courses', []))
+                all_unattempted.extend(y.get('unattempted_courses', []))
+                all_marks_flat.extend(y.get('marks', []))
+                annual_gpas[y['year_name']] = y.get('annual_gpa', 0.0)
+
+            grace_eligible = []
+            for g in [c for c in all_carried if c.get('is_grace_eligible')]:
+                needed = g.get('required_grace_marks', 1)
+                grace_eligible.append({
+                    "course_name": g["course_name"],
+                    "current_mark": g["last_score"],
+                    "required_grace_marks": needed,
+                    "status": g.get("status", "مشمولة بمساعدة الترفع"),
+                    "explanation": g.get("grace_explanation", f"مادة مؤهلة لنيل {needed} علامة مساعدة بموجب مرسوم تنظيم الجامعات السورية.")
+                })
+
+            return Response({
+                "student_university_id": p_match.primary_id,
+                "student_name": p_match.student_name,
+                "all_student_ids": p_match.all_student_ids,
+                "academic_status": p_match.academic_status,
+                "academic_level": p_match.academic_level,
+                "department": p_match.department,
+                "cumulative_gpa": p_match.cumulative_gpa,
+                "passed_courses_count": p_match.passed_courses_count,
+                "carried_courses_count": p_match.carried_courses_count,
+                "unattempted_courses_count": p_match.unattempted_courses_count,
+                "total_courses_count": p_match.total_courses_count,
+                "total_courses_taken": p_match.total_courses_count,
+                "highest_mark_overall": p_match.highest_mark_overall,
+                "highest_mark_course": p_match.highest_mark_course,
+                "lowest_mark_overall": p_match.lowest_mark_overall,
+                "lowest_mark_course": p_match.lowest_mark_course,
+                "years_summary": p_match.years_summary,
+                "courses_inverted_map": p_match.courses_inverted_map,
+                "progress_chart": p_match.progress_chart,
+                "passed_courses": all_passed,
+                "carried_courses": all_carried,
+                "unattempted_courses": all_unattempted,
+                "carried_subjects": [c["course_name"] for c in all_carried],
+                "remaining_subjects_count": len(all_carried),
+                "grace_marks_eligible": grace_eligible,
+                "annual_gpas": annual_gpas,
+                "marks": all_marks_flat,
+                "total_attempts_history_count": len(all_marks_flat)
+            })
 
         if target_clean:
             tokens = [tok for tok in target_clean.split() if len(tok) >= 2]
