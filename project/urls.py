@@ -7,7 +7,9 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from marks.views import (
     SmartMatchView, ClaimIdentityView, StudentSearchView,
     StudentCareerSummaryView, Top30LeaderboardView, CourseToppersView,
-    SingleMarkPDFView, CareerTranscriptPDFView, GDriveSyncTriggerView
+    SingleMarkPDFView, CareerTranscriptPDFView, GDriveSyncTriggerView,
+    LecturesSyncView, LecturesTreeView, LectureAcademicYearsView,
+    LectureSubjectsView, LectureFilesView
 )
 
 class CustomLoginView(TokenObtainPairView):
@@ -26,6 +28,7 @@ def api_root(request):
             'admin': '/admin/',
             'search': '/api/search/students/',
             'leaderboards': '/api/leaderboards/top30/',
+            'lectures': '/api/lectures/tree/',
             'auth_login': '/api/auth/login/',
             'auth_register': '/api/auth/register/'
         }
@@ -63,4 +66,11 @@ urlpatterns = [
 
     # Google Drive Auto-Sync
     path('api/sync/gdrive/trigger/', GDriveSyncTriggerView.as_view(), name='gdrive_sync_trigger'),
+
+    # Lectures Endpoints
+    path('api/lectures/sync/', LecturesSyncView.as_view(), name='lectures_sync'),
+    path('api/lectures/tree/', LecturesTreeView.as_view(), name='lectures_tree'),
+    path('api/lectures/years/', LectureAcademicYearsView.as_view(), name='lectures_years'),
+    path('api/lectures/subjects/', LectureSubjectsView.as_view(), name='lectures_subjects'),
+    path('api/lectures/files/', LectureFilesView.as_view(), name='lectures_files'),
 ]

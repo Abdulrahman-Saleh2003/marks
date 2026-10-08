@@ -109,3 +109,70 @@ class StudentProfile(models.Model):
     def __str__(self):
         return f"{self.student_name} ({self.primary_id})"
 
+
+# ==========================================
+# Lectures Models - Google Drive Integration
+# ==========================================
+
+class LectureAcademicYear(models.Model):
+    """Academic year (e.g. 2024-2025) from Google Drive lectures folder"""
+    year_label = models.CharField(max_length=20, unique=True, db_index=True)  # e.g. "2024-2025"
+    drive_folder_id = models.CharField(max_length=200)
+    drive_folder_url = models.URLField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-year_label']
+
+    def __str__(self):
+        return f"محاضرات العام {self.year_label}"
+
+
+class LectureStudyYear(models.Model):
+    """Study year within an academic year (السنة الأولى .. الخامسة)"""
+    academic_year = models.ForeignKey(LectureAcademicYear, on_delete=models.CASCADE, related_name='study_years')
+    year_number = models.IntegerField()  # 1-5
+    year_name = models.CharField(max_length=50)  # السنة الأولى
+    drive_folder_id = models.CharField(max_length=200)
+    drive_folder_url = models.URLField(max_length=500, blank=True)
+
+    class Meta:
+        unique_together = [('academic_year', 'year_number')]
+        ordering = ['year_number']
+
+    def __str__(self):
+        return f"{self.academic_year.year_label} - {self.year_name}"
+
+
+class LectureSubject(models.Model):
+    """Subject/course inside a study year"""
+    study_year = models.ForeignKey(LectureStudyYear, on_delete=models.CASCADE, related_name='subjects')
+    subject_name = models.CharField(max_length=200, db_index=True)
+    drive_folder_id = models.CharField(max_length=200)
+    drive_folder_url = models.URLField(max_length=500, blank=True)
+
+    class Meta:
+        ordering = ['subject_name']
+
+    def __str__(self):
+        return f"{self.study_year} - {self.subject_name}"
+
+
+class Lecture(models.Model):
+    """Individual lecture file"""
+    subject = models.ForeignKey(LectureSubject, on_delete=models.CASCADE, related_name='lectures')
+    title = models.CharField(max_length=300)
+    drive_file_id = models.CharField(max_length=200, unique=True, db_index=True)
+    drive_view_url = models.URLField(max_length=500, blank=True)
+    drive_download_url = models.URLField(max_length=500, blank=True)
+    file_type = models.CharField(max_length=50, blank=True)  # pdf, pptx, docx, etc.
+    file_size_bytes = models.BigIntegerField(default=0)
+    date_uploaded = models.CharField(max_length=30, blank=True)  # from Drive "last modified"
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['title']
+
+    def __str__(self):
+        return self.title

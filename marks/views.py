@@ -7,10 +7,14 @@ from rest_framework import status, permissions
 from django.db.models import Count, Avg, Max, Min, Q
 from django.http import HttpResponse
 
-from .models import StudentMark, Course, ExamSession, AcademicYear, Department, GDriveSyncLog, StudentProfile
+from .models import (
+    StudentMark, Course, ExamSession, AcademicYear, Department,
+    GDriveSyncLog, StudentProfile,
+    LectureAcademicYear, LectureStudyYear, LectureSubject, Lecture
+)
 from services.arabic_service import calculate_similarity, normalize_arabic
 from services.pdf_service import generate_mark_pdf, generate_transcript_pdf
-from services.gdrive_service import sync_google_drive
+from services.gdrive_service import sync_google_drive, sync_lectures_from_drive, get_lectures_tree
 
 
 ARABIC_YEAR_NAMES = {
@@ -1286,3 +1290,105 @@ class GDriveSyncTriggerView(APIView):
     def post(self, request):
         res = sync_google_drive()
         return Response(res)
+
+
+# ==========================================
+# Lectures API Views
+# ==========================================
+
+class LecturesSyncView(APIView):
+    """Sync lectures from Google Drive folder into the database."""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        result = sync_lectures_from_drive()
+        return Response(result)
+
+
+class LecturesTreeView(APIView):
+    """Get the full lectures tree (academic years -> study years -> subjects -> files)."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        year_label = get_param(request, "year")
+        study_year = get_param(request, "study_year")
+        study_year_num = int(study_year) if study_year.isdigit() else None
+        tree = get_lectures_tree(year_label=year_label or None, study_year_num=study_year_num)
+        return Response({"years": tree, "total_academic_years": len(tree)})
+
+
+class LectureAcademicYearsView(APIView):
+    """List all available academic years for lectures."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        years = LectureAcademicYear.objects.all().order_by('-year_label').values(
+            'year_label', 'drive_folder_url', 'drive_folder_id'
+        )
+        return Response({"academic_years": list(years)})
+
+
+class LectureSubjectsView(APIView):
+    """List subjects for a given academic year + study year."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        year_label = get_param(request, "year")
+        study_year_num = get_param(request, "study_year")
+
+        qs = LectureSubject.objects.select_related('study_year__academic_year')
+        if year_label:
+            qs = qs.filter(study_year__academic_year__year_label=year_label)
+        if study_year_num.isdigit():
+            qs = qs.filter(study_year__year_number=int(study_year_num))
+
+        result = []
+        for subj in qs:
+            result.append({
+                "id": subj.id,
+                "subject_name": subj.subject_name,
+                "drive_folder_url": subj.drive_folder_url,
+                "lecture_count": subj.lectures.count(),
+                "study_year": subj.study_year.year_number,
+                "year_name": subj.study_year.year_name,
+            })
+        return Response({"subjects": result})
+
+
+class LectureFilesView(APIView):
+    """Get all lecture files, optionally filtered by subject/year."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        subject_id = get_param(request, "subject_id")
+        year_label = get_param(request, "year")
+        study_year_num = get_param(request, "study_year")
+        search = get_param(request, "search")
+
+        qs = Lecture.objects.select_related('subject__study_year__academic_year')
+
+        if subject_id.isdigit():
+            qs = qs.filter(subject_id=int(subject_id))
+        if year_label:
+            qs = qs.filter(subject__study_year__academic_year__year_label=year_label)
+        if study_year_num.isdigit():
+            qs = qs.filter(subject__study_year__year_number=int(study_year_num))
+        if search:
+            qs = qs.filter(title__icontains=search)
+
+        result = [
+            {
+                "id": lec.id,
+                "title": lec.title,
+                "file_type": lec.file_type,
+                "drive_view_url": lec.drive_view_url,
+                "drive_download_url": lec.drive_download_url,
+                "date_uploaded": lec.date_uploaded,
+                "subject_name": lec.subject.subject_name,
+                "study_year": lec.subject.study_year.year_number,
+                "year_name": lec.subject.study_year.year_name,
+                "academic_year": lec.subject.study_year.academic_year.year_label,
+            }
+            for lec in qs[:200]
+        ]
+        return Response({"lectures": result, "total": qs.count()})
