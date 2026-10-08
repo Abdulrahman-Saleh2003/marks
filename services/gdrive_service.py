@@ -276,121 +276,376 @@ def get_lectures_tree(year_label=None, study_year_num=None):
     return result
 
 
+MARKS_DRIVE_SUBFOLDERS = [
+    ("السنة الأولى", 1, "1N_nGm8d9QfQ67bbnkEybNDITJL2iV_ct"),
+    ("السنة الثانية", 2, "1T_9q6T0VyNXwio6ERw0G996kUbshN6Ni"),
+    ("السنة الثالثة", 3, "1WplY-u3_DqX-KLfW4v9zQOVmUCufJ7pl"),
+    ("السنة الرابعة", 4, "1Rz_jrreVuWeWPutESipaHEKhvaOVsIUS"),
+    ("السنة الخامسة", 5, "1tN0ULcQYgLETit11VNQM9bRrAoynYvfk"),
+]
+
+STATUS_TOKENS = {'راسب', 'ناجح', 'بسار', 'حجان', 'محروم', 'غياب', 'حرمان', 'منقول'}
+
+
+def norm_mark_s(s):
+    s = re.sub(r'(?:^|[\s_])ال', ' ', s)
+    return s.replace(' ', '').replace('ة', 'ه').replace('إ', 'ا').replace('أ', 'ا').replace('آ', 'ا').replace('ى', 'ي')
+
+
+def resolve_course_for_file(fname, year_num):
+    fn = fname.replace('.pdf', '').strip()
+    n = norm_mark_s(fn)
+
+    if 'حساباتعلميه' in n:
+        return 'الحسابات العلمية', 3
+    if 'مشروعتخرج' in n:
+        return 'مشروع تخرج', 5
+    if 'مشروعمترجمات' in n:
+        return 'مشروع المترجمات', 4
+    if 'مشروعسنهثالثه' in n or ('مشروع' in n and year_num == 3):
+        return 'مشروع 1', 3
+    if 'مشروع2' in n or ('مشروع' in n and year_num == 4):
+        return 'مشروع 2', 4
+
+    if 'تحليل1' in n:
+        return 'التحليل 1', 1
+    if 'تحليل2' in n:
+        return 'التحليل 2', 1
+    if 'تحليل3' in n:
+        return 'التحليل 3', 2
+    if 'عددي' in n:
+        return 'التحليل العددي', 2
+
+    if 'برمجه1' in n:
+        return 'البرمجة 1', 1
+    if 'برمجه2' in n:
+        return 'البرمجة 2', 1
+    if 'برمجه3' in n:
+        return 'البرمجة 3', 2
+    if 'تفرعيه' in n:
+        return 'البرمجة التفرعية', 4
+
+    if 'خوارزميات1' in n:
+        return 'الخوارزميات و بنى المعطيات 1', 2
+    if 'خوارزميات2' in n:
+        return 'الخوارزميات و بنى المعطيات 2', 2
+    if 'خوارزمياتبحث' in n:
+        return 'خوارزميات البحث الذكية', 4
+
+    if 'جبرعام' in n:
+        return 'الجبر العام', 1
+    if 'جبرخطي' in n:
+        return 'الجبر الخطي', 1
+
+    if 'داراتكهربائيه' in n:
+        return 'الدارات الكهربائية و الالكترونية', 1
+    if 'داراتمنطقيه' in n:
+        return 'الدارات المنطقية', 2
+
+    if 'فيزياء' in n:
+        return 'الفيزياء', 1
+    if 'عربيه' in n:
+        return 'اللغة العربية', 1
+    if 'ثقافه' in n:
+        return 'الثقافة القومية الاشتراكية', 1
+    if 'عملحواسيب' in n or 'عملحاسب' in n:
+        return 'مبادئ عمل الحواسيب', 1
+
+    if 'اتصال' in n or 'اتصاال' in n:
+        return 'الاتصالات الرقمية', 2
+    if 'احتماالت' in n or 'احتمالات' in n or 'احصاء' in n:
+        return 'الاحتمالات و الاحصاء', 2
+    if 'بنيانحواسيب1' in n:
+        return 'بنيان الحواسيب 1', 2
+    if 'بنيانحواسيب2' in n:
+        return 'بنيان الحواسيب 2', 3
+    if 'مهارات' in n:
+        return 'مهارات التواصل', 2
+
+    if 'انكليزي1' in n:
+        return 'انكليزي 1', 1
+    if 'انكليزي2' in n:
+        return 'انكليزي 2', 1
+    if 'انكليزي3' in n:
+        return 'انكليزي 3', 2
+    if 'انكليزي4' in n:
+        return 'انكليزي 4', 2
+
+    if 'ادارهشبكات' in n:
+        return 'إدارة الشبكات الحاسوبية', 5
+    if 'شبكاتحاسوبيه' in n or 'اساسياتشبكات' in n or 'اساسياتالشبكات' in n:
+        return 'أساسيات الشبكات', 3
+    if 'صوريه' in n:
+        return 'اللغات الصورية', 3
+    if 'بحوثعمليات' in n:
+        return 'بحوث العمليات', 3
+    if 'قواعدمعطيات1' in n:
+        return 'قواعد المعطيات 1', 3
+    if 'قواعدمعطيات2' in n:
+        return 'قواعد المعطيات 2', 4
+    if 'قواعدمعطياتمتقدمه' in n:
+        return 'قواعد المعطيات المتقدمة', 5
+    if 'لغاتبرمجه' in n:
+        return 'لغات البرمجة', 3
+    if 'مبادئذكاء' in n:
+        return 'مبادئ الذكاء الصنعي', 3
+    if 'بيانيات' in n:
+        return 'البيانيات', 3
+
+    if 'اقتصاد' in n:
+        return 'الاقتصاد و الإدارة في مؤسسة', 4
+    if 'تسويق' in n:
+        return 'التسويق', 4
+    if 'مترجمات' in n:
+        return 'المترجمات', 4
+    if 'وسائط' in n:
+        return 'نظم الوسائط المتعددة', 4
+    if 'تشغيل1' in n:
+        return 'نظم تشغيل 1', 4
+    if 'تشغيل2' in n:
+        return 'نظم التشغيل 2', 4
+    if 'هندسه1' in n or 'هندسهبرمجيات1' in n:
+        return 'هندسة البرمجيات 1', 4
+    if 'هندسه2' in n or 'هندسهبرمجيات2' in n:
+        return 'هندسة البرمجيات 2', 4
+    if 'هندسه3' in n or 'هندسهبرمجيات3' in n:
+        return 'هندسة البرمجيات 3', 5
+    if 'هندسهنظم' in n:
+        return 'هندسة نظم المعلومات', 5
+    if 'حقائق' in n:
+        return 'الحقائق الافتراضية', 4
+    if 'عصبونيه' in n:
+        return 'الشبكات العصبونية', 4
+    if 'قواعدمعرفه' in n:
+        return 'نظم قواعد المعرفة', 4
+    if 'بروتوكو' in n or 'برتوكو' in n:
+        return 'برتوكولات الاتصالات الحاسوبية', 4
+    if 'تطبيقاتشبكيه' in n:
+        return 'برمجة التطبيقات الشبكية', 4
+
+    if 'امنشبكات' in n:
+        return 'أمن الشبكات الحاسوبية', 5
+    if 'امننظم' in n:
+        return 'أمن نظم معلومات', 5
+    if 'روبوتيه' in n:
+        return 'الروبوتية', 5
+    if 'ادارهمشاريع' in n:
+        return 'إدارة المشاريع', 5
+    if 'استكشاف' in n:
+        return 'استكشاف المعرفة', 5
+    if 'تعلمتلقائي' in n:
+        return 'التعلم التلقائي', 5
+    if 'تصميمشبكات' in n:
+        return 'تصميم الشبكات الحاسوبية', 5
+    if 'تطبيقاتانترنت' in n:
+        return 'تطبيقات الانترنت', 5
+    if 'رؤيا' in n:
+        return 'الرؤيا الحاسوبية', 5
+    if 'لغاتطبيعيه' in n:
+        return 'معالجة اللغات الطبيعية', 5
+    if 'منطقترجيحي' in n:
+        return 'المنطق الترجيحي و الخوارزميات الوراثية', 5
+    if 'بحثعنمعلومات' in n:
+        return 'نظم البحث عن المعلومات', 5
+    if 'موزعه' in n:
+        return 'النظم و التطبيقات الموزعة', 5
+    if 'زمنحقيقي' in n:
+        return 'نظم الزمن الحقيقي', 5
+    if 'نمذجه' in n or 'محاكاه' in n:
+        return 'نمذجة و محاكاة النظم الشبكية', 5
+
+    return fn, year_num
+
+
+def parse_pdf_mark_row(row):
+    clean_row = [str(c).replace('\n', ' ').strip() if c else '' for c in row]
+    if not any(clean_row) or len(clean_row) < 5:
+        return None
+
+    row_str = " ".join(clean_row)
+    if any(h in row_str for h in ["جامعة دمشق", "الدرجة النهائية", "اسم الطالب", "الرقم", "كلية الهندسة", "العالمة كتابة", "الدرجة رقما"]):
+        return None
+
+    if re.match(r'^\d{3,10}$', clean_row[-1]):
+        pass
+    elif re.match(r'^\d{3,10}$', clean_row[0]):
+        clean_row = clean_row[::-1]
+    else:
+        return None
+
+    sid = clean_row[-1]
+    student_cand = decode_pdf_arabic(clean_row[-2]).strip()
+    father_cand = decode_pdf_arabic(clean_row[-3]).strip()
+
+    if student_cand in STATUS_TOKENS or not student_cand:
+        return None
+    if father_cand in STATUS_TOKENS:
+        father_cand = ""
+
+    if father_cand and father_cand not in student_cand:
+        full_name = f"{father_cand} {student_cand}".strip()
+    else:
+        full_name = student_cand
+
+    def parse_num(val):
+        if not val:
+            return 0.0
+        v_clean = str(val).replace('\n', ' ').strip()
+        nums = re.findall(r'\b\d+(?:\.\d+)?\b', v_clean)
+        if nums:
+            try:
+                v = float(nums[0])
+                if 0.0 <= v <= 100.0:
+                    return v
+            except ValueError:
+                pass
+        return 0.0
+
+    if len(clean_row) == 6:
+        total = parse_num(clean_row[-4])
+        prac = 0.0
+        theo = total
+    else:
+        total = parse_num(clean_row[-6])
+        prac = parse_num(clean_row[-5])
+        theo = parse_num(clean_row[-4])
+        if total == 0.0 and (prac > 0.0 or theo > 0.0):
+            total = min(100.0, prac + theo)
+
+    res_status = "ناجح" if total >= 60.0 else "راسب"
+    return {
+        "sid": sid,
+        "name": full_name,
+        "clean_name": normalize_arabic(full_name),
+        "total": total,
+        "prac": prac,
+        "theo": theo,
+        "status": res_status,
+        "is_grace": (total in [58.0, 59.0])
+    }
+
+
 def sync_google_drive():
     """
-    Polls marks Google Drive folder, downloads new PDFs, decodes text, and ingests into database.
+    Polls marks Google Drive folder (and its 5 study-year subfolders),
+    downloads new PDFs, decodes text accurately, and ingests into database.
     """
-    import os
+    import io
+    import time
     import pdfplumber
-    from django.conf import settings
     from marks.models import GDriveSyncLog, Course, ExamSession, StudentMark, AcademicYear
 
-    folder_id = getattr(settings, 'GDRIVE_FOLDER_ID', MARKS_DRIVE_FOLDER_ID)
-    folder_url = f"https://drive.google.com/embeddedfolderview?id={folder_id}#list"
-
-    resp = SESSION.get(folder_url, headers=HEADERS, timeout=20)
-    if resp.status_code != 200:
-        return {"status": "ERROR", "message": f"HTTP {resp.status_code}", "new_files": 0, "records": 0, "files": []}
-
-    matches = re.findall(r'data-id="([a-zA-Z0-9_-]+)".*?class="flip-entry-title"[^>]*>([^<]+)<', resp.text)
-    if not matches:
-        matches = re.findall(r'id="entry-([a-zA-Z0-9_-]+)".*?<span class="file-name">([^<]+)</span>', resp.text)
-
-    synced_files = []
     total_records = 0
+    synced_files = []
+    affected_students = set()
 
-    for file_id, file_name in matches:
-        if not file_name.lower().endswith(".pdf"):
+    # Gather targets: 5 subfolders + root
+    target_folders = list(MARKS_DRIVE_SUBFOLDERS)
+    target_folders.append(("الجذر", 1, MARKS_DRIVE_FOLDER_ID))
+
+    for folder_label, default_year, folder_id in target_folders:
+        folder_url = f"https://drive.google.com/embeddedfolderview?id={folder_id}#list"
+        try:
+            resp = SESSION.get(folder_url, headers=HEADERS, timeout=25)
+            if resp.status_code != 200:
+                continue
+        except Exception:
             continue
 
-        clean_name = decode_pdf_arabic(file_name) if "اال" in file_name or "ة" in file_name else file_name
+        matches = re.findall(r'id="entry-([^"]+)".*?class="flip-entry-title"[^>]*>([^<]+)<', resp.text)
+        if not matches:
+            matches = re.findall(r'data-id="([a-zA-Z0-9_-]+)".*?class="flip-entry-title"[^>]*>([^<]+)<', resp.text)
 
-        if GDriveSyncLog.objects.filter(file_id=file_id).exists():
-            continue
+        pdf_files = [(m[0], m[1].strip()) for m in matches if m[1].lower().endswith(".pdf")]
 
-        download_url = f"https://drive.usercontent.google.com/download?id={file_id}&export=download&authuser=0"
-        file_resp = SESSION.get(download_url, headers=HEADERS, stream=True, timeout=60)
-        if file_resp.status_code != 200:
-            continue
+        for file_id, file_name in pdf_files:
+            if GDriveSyncLog.objects.filter(file_id=file_id, status="SUCCESS").exists():
+                continue
 
-        temp_pdf = f"temp_gdrive_{file_id}.pdf"
-        with open(temp_pdf, "wb") as f:
-            for chunk in file_resp.iter_content(32768):
-                if chunk: f.write(chunk)
-
-        course_name = clean_name.replace(".pdf", "").replace("نتيجة مادة", "").strip()
-        default_year, _ = AcademicYear.objects.get_or_create(id=1, defaults={"name": "First Year"})
-        course, _ = Course.objects.get_or_create(name=course_name, defaults={"academic_year": default_year, "semester": 2})
-
-        exam_session = ExamSession.objects.create(
-            course=course,
-            session_title=f"{course_name} - 2025-2026 الفصل الثاني",
-            academic_year_str="2025-2026",
-            semester_num=2,
-            source_type="GDRIVE"
-        )
-
-        imported = 0
-        with pdfplumber.open(temp_pdf) as pdf:
-            marks_batch = []
-            for page in pdf.pages:
-                table = page.extract_table()
-                if not table: continue
-                for row in table[1:]:
-                    clean_row = [str(c).strip() if c else "" for c in row]
-                    if not any(clean_row): continue
-
-                    sid = ""
-                    sname = ""
-                    for col in clean_row:
-                        if re.match(r"^\d{4,8}$", col) and not sid: sid = col
-                        elif re.search(r"[\u0600-\u06FF]", col) and len(col) > 3 and not sname:
-                            sname = decode_pdf_arabic(col)
-
-                    nums = []
-                    for col in clean_row:
-                        try: nums.append(float(col))
-                        except ValueError: pass
-
-                    total = max(nums) if nums else 0.0
-                    prac = nums[0] if len(nums) >= 2 else 0.0
-                    theo = nums[1] if len(nums) > 2 else (total - prac)
-                    result = "ناجح" if total >= 60.0 else "راسب"
-
-                    if sname and (sid or total > 0):
-                        marks_batch.append(
-                            StudentMark(
-                                session=exam_session,
-                                student_university_id=sid or f"GEN_{imported}",
-                                student_name=sname,
-                                student_name_clean=normalize_arabic(sname),
-                                practical_mark=prac,
-                                theoretical_mark=theo,
-                                total_mark=total,
-                                result_status=result,
-                                is_grace_eligible=(total in [58.0, 59.0])
-                            )
-                        )
-                        imported += 1
-
-            if marks_batch:
-                StudentMark.objects.bulk_create(marks_batch)
+            download_url = f"https://drive.usercontent.google.com/download?id={file_id}&export=download&authuser=0"
+            content = None
+            for _ in range(3):
                 try:
-                    update_profiles_for_students([m.student_name_clean for m in marks_batch])
-                except Exception as ex:
-                    print(f"[Auto-Profile] Notice: {ex}")
+                    r = SESSION.get(download_url, headers=HEADERS, timeout=45)
+                    if r.status_code == 200 and len(r.content) > 1000:
+                        content = r.content
+                        break
+                except Exception:
+                    time.sleep(1)
 
-        if os.path.exists(temp_pdf):
-            os.remove(temp_pdf)
+            if not content:
+                continue
 
-        GDriveSyncLog.objects.create(
-            file_id=file_id,
-            file_name=clean_name,
-            records_count=imported,
-            status="SUCCESS"
-        )
-        synced_files.append(clean_name)
-        total_records += imported
+            cname, cyear = resolve_course_for_file(file_name, default_year)
+            ay, _ = AcademicYear.objects.get_or_create(id=cyear, defaults={"name": f"Year {cyear}"})
+            course, _ = Course.objects.get_or_create(name=cname, defaults={"academic_year": ay, "semester": 2})
+            if course.academic_year_id != cyear:
+                course.academic_year = ay
+                course.save()
+
+            exam_session, _ = ExamSession.objects.get_or_create(
+                course=course,
+                academic_year_str="2025-2026",
+                semester_num=2,
+                defaults={
+                    "session_title": f"{course.name} - 2025-2026 الفصل الثاني",
+                    "source_type": "GDRIVE_2026"
+                }
+            )
+
+            marks_batch = []
+            try:
+                with pdfplumber.open(io.BytesIO(content)) as pdf:
+                    for page in pdf.pages:
+                        table = page.extract_table()
+                        if not table:
+                            continue
+                        for row in table:
+                            parsed = parse_pdf_mark_row(row)
+                            if not parsed:
+                                continue
+                            marks_batch.append(
+                                StudentMark(
+                                    session=exam_session,
+                                    student_university_id=parsed["sid"],
+                                    student_name=parsed["name"],
+                                    student_name_clean=parsed["clean_name"],
+                                    practical_mark=parsed["prac"],
+                                    theoretical_mark=parsed["theo"],
+                                    total_mark=parsed["total"],
+                                    result_status=parsed["status"],
+                                    is_grace_eligible=parsed["is_grace"]
+                                )
+                            )
+            except Exception as ex:
+                print(f"[GDrive Sync Error] {file_name}: {ex}")
+
+            imported_count = 0
+            if marks_batch:
+                existing_ids = set(StudentMark.objects.filter(session=exam_session).values_list('student_university_id', flat=True))
+                to_create = [m for m in marks_batch if m.student_university_id not in existing_ids]
+                if to_create:
+                    StudentMark.objects.bulk_create(to_create)
+                    imported_count = len(to_create)
+                    for m in to_create:
+                        affected_students.add(m.student_name_clean)
+
+            GDriveSyncLog.objects.update_or_create(
+                file_id=file_id,
+                defaults={
+                    "file_name": file_name,
+                    "records_count": imported_count,
+                    "status": "SUCCESS"
+                }
+            )
+            synced_files.append(file_name)
+            total_records += imported_count
+
+    if affected_students:
+        try:
+            update_profiles_for_students(list(affected_students))
+        except Exception as ex:
+            print(f"[Auto-Profile Update] Notice: {ex}")
 
     return {
         "status": "SUCCESS",
