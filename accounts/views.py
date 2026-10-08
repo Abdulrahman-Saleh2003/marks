@@ -55,7 +55,13 @@ class RegisterView(APIView):
             }, status=status.HTTP_201_CREATED)
         errors = serializer.errors
         err_msg = "فشل إنشاء الحساب."
-        if 'phone_number' in errors or 'username' in errors:
+        if 'phone_number' in errors:
+            err_msg = str(errors['phone_number'][0])
+        elif 'full_name' in errors:
+            err_msg = str(errors['full_name'][0])
+        elif 'password' in errors:
+            err_msg = str(errors['password'][0])
+        elif 'username' in errors:
             err_msg = "رقم الهاتف هذا مسجل بالفعل. يرجى تسجيل الدخول أو استخدام رقم آخر."
         return Response({"error": err_msg, "detail": err_msg, "errors": errors}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -65,8 +71,10 @@ class ForgotPasswordView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        from .serializers import normalize_phone_number
         identifier = request.data.get("phone_number_or_email", "").strip()
-        user = User.objects.filter(phone_number=identifier).first() or User.objects.filter(email=identifier).first()
+        norm_phone = normalize_phone_number(identifier)
+        user = User.objects.filter(phone_number=norm_phone or identifier).first() or User.objects.filter(email=identifier).first()
         if not user:
             return Response({"error": "المستخدم غير مسجل"}, status=404)
 
@@ -88,7 +96,9 @@ class ResetPasswordView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        from .serializers import normalize_phone_number
         phone = request.data.get("phone_number", "").strip()
+        phone = normalize_phone_number(phone) or phone
         otp = request.data.get("otp_code", "").strip()
         new_pwd = request.data.get("new_password", "")
 
