@@ -1361,6 +1361,7 @@ class LectureFilesView(APIView):
 
     def get(self, request):
         subject_id = get_param(request, "subject_id")
+        subject_name = get_param(request, "subject_name")
         year_label = get_param(request, "year")
         study_year_num = get_param(request, "study_year")
         search = get_param(request, "search")
@@ -1369,12 +1370,18 @@ class LectureFilesView(APIView):
 
         if subject_id.isdigit():
             qs = qs.filter(subject_id=int(subject_id))
+        elif subject_name:
+            qs = qs.filter(subject__subject_name__iexact=subject_name)
+
         if year_label:
             qs = qs.filter(subject__study_year__academic_year__year_label=year_label)
         if study_year_num.isdigit():
             qs = qs.filter(subject__study_year__year_number=int(study_year_num))
         if search:
-            qs = qs.filter(title__icontains=search)
+            qs = qs.filter(
+                Q(title__icontains=search) |
+                Q(subject__subject_name__icontains=search)
+            )
 
         result = [
             {
@@ -1389,6 +1396,6 @@ class LectureFilesView(APIView):
                 "year_name": lec.subject.study_year.year_name,
                 "academic_year": lec.subject.study_year.academic_year.year_label,
             }
-            for lec in qs[:200]
+            for lec in qs[:300]
         ]
         return Response({"lectures": result, "total": qs.count()})
