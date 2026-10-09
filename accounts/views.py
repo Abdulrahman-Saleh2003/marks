@@ -130,3 +130,41 @@ class ProfileView(APIView):
 
     def get(self, request):
         return Response(UserProfileSerializer(request.user).data)
+
+
+class TelegramWebhookView(APIView):
+    """Webhook endpoint receiving updates from Telegram Bot API in real-time."""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        try:
+            update_data = request.data
+            from services.telegram_service import handle_telegram_update
+            handle_telegram_update(update_data)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"[TELEGRAM WEBHOOK ERROR] {e}")
+        return Response({"ok": True})
+
+    def get(self, request):
+        return Response({
+            "status": "Telegram webhook endpoint is online",
+            "bot_username": "Ite_marks_abd_bot"
+        })
+
+
+class TelegramSetupWebhookView(APIView):
+    """Utility endpoint to register or remove the Telegram Webhook."""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        from services.telegram_service import set_telegram_webhook
+        base_url = request.data.get('url') or "https://damascus-ite-marks-api.onrender.com/api/telegram/webhook/"
+        ok, msg = set_telegram_webhook(base_url)
+        return Response({"ok": ok, "message": msg, "webhook_url": base_url})
+
+    def delete(self, request):
+        from services.telegram_service import delete_telegram_webhook
+        ok, msg = delete_telegram_webhook()
+        return Response({"ok": ok, "message": msg})
+

@@ -1,7 +1,10 @@
 from django.contrib import admin
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
-from accounts.views import RegisterView, ForgotPasswordView, ResetPasswordView, ProfileView
+from accounts.views import (
+    RegisterView, ForgotPasswordView, ResetPasswordView, ProfileView,
+    TelegramWebhookView, TelegramSetupWebhookView
+)
 from accounts.serializers import CustomTokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 from marks.views import (
@@ -73,4 +76,8 @@ urlpatterns = [
     path('api/lectures/years/', LectureAcademicYearsView.as_view(), name='lectures_years'),
     path('api/lectures/subjects/', LectureSubjectsView.as_view(), name='lectures_subjects'),
     path('api/lectures/files/', LectureFilesView.as_view(), name='lectures_files'),
+
+    # Telegram Bot Webhook Endpoints
+    path('api/telegram/webhook/', TelegramWebhookView.as_view(), name='telegram_webhook'),
+    path('api/telegram/setup-webhook/', TelegramSetupWebhookView.as_view(), name='telegram_setup_webhook'),
 ]
